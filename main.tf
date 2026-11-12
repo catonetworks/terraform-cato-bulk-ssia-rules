@@ -57,6 +57,19 @@ locals {
   }
 }
 
+# Safety guard: fail planning early if the decoded policy JSON has 0 rules, unless
+# the caller opts in via allow_empty_policy. Protects against a truncated export,
+# a renamed upstream JSON key, or a wrong-tenant export silently destroying every
+# live rule. No provider, no count/for_each - always evaluated.
+resource "terraform_data" "guard_empty_policy" {
+  lifecycle {
+    precondition {
+      condition     = var.allow_empty_policy || length(local.rules_by_name) > 0
+      error_message = "Policy JSON contains 0 rules. If intentional (greenfield/teardown), set allow_empty_policy = true. A truncated or wrong-tenant export would otherwise destroy the entire live policy."
+    }
+  }
+}
+
 # Optional account-level policy toggle (SDP Static IP Allocation ships disabled on new
 # tenants - without enabling it, published rules have no effect).
 resource "cato_sdp_static_ip_allocation_policy" "policy" {
